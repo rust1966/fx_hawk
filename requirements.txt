@@ -1,0 +1,54 @@
+# FX HAWK
+
+FX HAWK helps travelers compare an exchange shop's quote against a live FX market benchmark.
+
+## Fixes in this version
+
+- Fixed white-background contrast bugs.
+- Replaced Streamlit metric/dataframe widgets with custom dark UI cards/tables where needed.
+- Fixed the five-factor scale by adding visible horizontal scale bars from -2 to +2.
+- Improved headline scoring logic.
+- Added recent market momentum as a fallback when headlines are sparse.
+- Kept the interface simple and brokerage-style.
+
+## Install
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+If `python` does not work:
+
+```powershell
+py -m pip install -r requirements.txt
+```
+
+## Run
+
+```powershell
+python -m streamlit run app.py
+```
+
+If `python` does not work:
+
+```powershell
+py -m streamlit run app.py
+```
+
+## Added explainer block
+
+This version includes a bottom text block titled **How FX HAWK Works**. It explains:
+
+- how the app pulls Yahoo Finance FX data,
+- how it compares the shop rate against spot,
+- how the verdict is calculated,
+- how the headline/momentum forecast works,
+- and how the five-factor FX signal should be interpreted.
+
+
+## Latest UI fixes
+
+- Replaced the five-factor scale bars with clean color-coded word ratings.
+- Each factor now says whether it is **Pushing rate up**, **Pulling rate down**, or **Neutral / unclear**.
+- Added short explanations for each factor.
+- Replaced the default Streamlit line chart with an Altair chart that does not force the y-axis to start at zero.

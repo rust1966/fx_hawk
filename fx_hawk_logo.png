@@ -1,0 +1,950 @@
+import streamlit as st
+import pandas as pd
+import yfinance as yf
+import altair as alt
+from pathlib import Path
+from urllib.parse import quote_plus
+import requests
+import feedparser
+
+st.set_page_config(page_title="FX HAWK", page_icon="🦅", layout="centered")
+
+# -----------------------------
+# Styling
+# -----------------------------
+st.markdown(
+    """
+    <style>
+    :root {
+        --bg: #050505;
+        --panel: #111111;
+        --panel2: #171717;
+        --line: #2A2A2A;
+        --text: #F7F7F7;
+        --muted: #AAAAAA;
+        --gold: #D9B45F;
+        --green: #22C55E;
+        --yellow: #EAB308;
+        --red: #EF4444;
+        --white: #FFFFFF;
+        --black: #050505;
+    }
+
+    html, body, .stApp {
+        background: #050505 !important;
+        color: var(--text) !important;
+    }
+
+    .stApp {
+        background: radial-gradient(circle at top, #151515 0%, #050505 42%, #000000 100%) !important;
+    }
+
+    [data-testid="stHeader"] {
+        background: rgba(0,0,0,0) !important;
+    }
+
+    .block-container {
+        max-width: 920px;
+        padding-top: 1.4rem;
+        padding-bottom: 3rem;
+    }
+
+    /* General readable dark theme */
+    .stMarkdown, .stMarkdown p, .stMarkdown span, .stMarkdown div,
+    label, [data-testid="stCaptionContainer"], [data-testid="stWidgetLabel"] {
+        color: var(--text) !important;
+    }
+
+    [data-testid="stCaptionContainer"] p, .muted {
+        color: var(--muted) !important;
+    }
+
+    /* Streamlit inputs */
+    .stNumberInput input {
+        background-color: #0D0D0D !important;
+        color: #FFFFFF !important;
+        border: 1px solid #3A3A3A !important;
+        border-radius: 12px !important;
+    }
+
+    [data-baseweb="select"] > div {
+        background-color: #0D0D0D !important;
+        color: #FFFFFF !important;
+        border: 1px solid #3A3A3A !important;
+        border-radius: 12px !important;
+    }
+
+    [data-baseweb="select"] span {
+        color: #FFFFFF !important;
+    }
+
+    /* Fix dropdown popover contrast */
+    [data-baseweb="popover"],
+    [data-baseweb="popover"] *,
+    [role="listbox"],
+    [role="listbox"] *,
+    [role="option"],
+    [role="option"] * {
+        color: #050505 !important;
+    }
+
+    [role="option"][aria-selected="true"],
+    [role="option"]:hover {
+        background-color: #E8E8E8 !important;
+        color: #050505 !important;
+    }
+
+    /* Fix alert contrast */
+    .stAlert {
+        background-color: #101010 !important;
+        border: 1px solid #2A2A2A !important;
+    }
+
+    .stAlert * {
+        color: #FFFFFF !important;
+    }
+
+    .app-shell {
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: rgba(17,17,17,0.94);
+        padding: 26px;
+        box-shadow: 0 24px 70px rgba(0,0,0,0.50);
+    }
+
+    .brand-title {
+        font-size: 2.35rem;
+        font-weight: 850;
+        letter-spacing: 0.08em;
+        margin: 0;
+        color: #FFFFFF !important;
+    }
+
+    .brand-subtitle {
+        color: var(--muted) !important;
+        font-size: 0.98rem;
+        margin-top: -4px;
+        margin-bottom: 18px;
+    }
+
+    .section-card {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: linear-gradient(180deg, #121212 0%, #0A0A0A 100%);
+        padding: 18px;
+        margin-top: 16px;
+    }
+
+    .small-label {
+        color: var(--muted) !important;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 8px;
+        font-weight: 700;
+    }
+
+    .result-box, .forecast-box {
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--gold);
+        border-radius: 16px;
+        background: #0D0D0D;
+        padding: 18px;
+        margin-top: 16px;
+    }
+
+    .verdict {
+        font-size: 1.75rem;
+        font-weight: 850;
+        margin-bottom: 4px;
+    }
+
+    .forecast-title {
+        font-size: 1.35rem;
+        font-weight: 850;
+        margin-bottom: 4px;
+    }
+
+    .money-line {
+        font-size: 1.02rem;
+        line-height: 1.65;
+        color: #FFFFFF !important;
+    }
+
+    .money-line b {
+        color: #FFFFFF !important;
+    }
+
+    .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+    }
+
+    .metric-card {
+        background: #0D0D0D;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 14px 16px;
+    }
+
+    .metric-label {
+        color: var(--muted) !important;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 5px;
+    }
+
+    .metric-value {
+        color: #FFFFFF !important;
+        font-size: 1.45rem;
+        font-weight: 800;
+    }
+
+    .hawk-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        overflow: hidden;
+        border-radius: 14px;
+        margin-top: 8px;
+        border: 1px solid var(--line);
+    }
+
+    .hawk-table th {
+        text-align: left;
+        padding: 10px 12px;
+        background: #F4F4F4 !important;
+        color: #050505 !important;
+        font-size: 0.82rem;
+        font-weight: 800;
+    }
+
+    .hawk-table td {
+        padding: 12px;
+        background: #111111 !important;
+        color: #FFFFFF !important;
+        border-top: 1px solid #242424;
+        font-size: 0.92rem;
+        vertical-align: middle;
+    }
+
+    .hawk-table td * {
+        color: inherit;
+    }
+
+    .score-wrap {
+        width: 100%;
+        min-width: 170px;
+    }
+
+    .scale-line {
+        position: relative;
+        height: 10px;
+        background: #2A2A2A;
+        border-radius: 999px;
+        overflow: hidden;
+    }
+
+    .scale-zero {
+        position: absolute;
+        left: 50%;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #F4F4F4;
+        opacity: 0.85;
+    }
+
+    .scale-fill {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        border-radius: 999px;
+    }
+
+    .score-num {
+        margin-top: 5px;
+        font-weight: 800;
+        font-size: 0.82rem;
+    }
+
+    .headline-list {
+        margin-top: 8px;
+        padding-left: 18px;
+    }
+
+    .headline-list li {
+        margin-bottom: 6px;
+        color: var(--muted) !important;
+    }
+
+    .footnote {
+        color: var(--muted) !important;
+        font-size: 0.84rem;
+        line-height: 1.45;
+        margin-top: 8px;
+    }
+
+    hr {
+        border-color: var(--line);
+    }
+
+    /* Critical fix: when any Streamlit element renders a white surface, force black text */
+    div[style*="background-color: rgb(255, 255, 255)"] *,
+    div[style*="background: rgb(255, 255, 255)"] *,
+    section[style*="background-color: rgb(255, 255, 255)"] *,
+    table[style*="background-color: rgb(255, 255, 255)"] * {
+        color: #050505 !important;
+    }
+
+
+    .how-it-works-box {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: #0B0B0B;
+        padding: 18px;
+        margin-top: 18px;
+    }
+
+    .how-it-works-box h3 {
+        color: #FFFFFF !important;
+        margin-top: 0;
+        margin-bottom: 8px;
+        font-size: 1.10rem;
+    }
+
+    .how-it-works-box p, .how-it-works-box li {
+        color: #D4D4D4 !important;
+        font-size: 0.92rem;
+        line-height: 1.55;
+    }
+
+    .how-it-works-box ul {
+        margin-top: 8px;
+        padding-left: 20px;
+    }
+
+
+    .factor-card {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: #0D0D0D;
+        padding: 15px 16px;
+        margin-top: 10px;
+    }
+
+    .factor-topline {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 8px;
+    }
+
+    .factor-name {
+        font-weight: 800;
+        color: #FFFFFF !important;
+        font-size: 0.98rem;
+    }
+
+    .factor-badge {
+        font-weight: 850;
+        border-radius: 999px;
+        padding: 5px 10px;
+        font-size: 0.80rem;
+        color: #050505 !important;
+        white-space: nowrap;
+    }
+
+    .factor-explain {
+        color: #D4D4D4 !important;
+        font-size: 0.90rem;
+        line-height: 1.48;
+        margin-top: 4px;
+    }
+
+    .factor-score-note {
+        color: #AAAAAA !important;
+        font-size: 0.78rem;
+        margin-top: 6px;
+    }
+
+    @media (max-width: 760px) {
+        .metric-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# -----------------------------
+# Constants
+# -----------------------------
+CURRENCIES = ["USD", "GBP", "EUR"]
+PAIR_TICKERS = {
+    ("EUR", "USD"): "EURUSD=X",
+    ("GBP", "USD"): "GBPUSD=X",
+    ("EUR", "GBP"): "EURGBP=X",
+}
+
+CURRENCY_SEARCH_TERMS = {
+    "USD": ["usd", "dollar", "federal reserve", "fed", "united states", "u.s."],
+    "GBP": ["gbp", "pound", "sterling", "bank of england", "boe", "uk", "britain"],
+    "EUR": ["eur", "euro", "ecb", "european central bank", "eurozone", "euro area"],
+}
+
+CURRENCY_NEWS_QUERY = {
+    "USD": "US dollar Federal Reserve inflation interest rates economy",
+    "GBP": "British pound Bank of England inflation interest rates UK economy",
+    "EUR": "euro European Central Bank inflation interest rates eurozone economy",
+}
+
+EXCELLENT_CUTOFF = 0.01
+FAIR_CUTOFF = 0.03
+EXPENSIVE_CUTOFF = 0.06
+HISTORY_PERIOD = "1y"
+
+FACTOR_KEYWORDS = {
+    "Interest rates": {
+        "up": ["hike", "hikes", "hawkish", "higher rate", "higher rates", "tightening", "yield rises", "yields rise", "bond yields rise"],
+        "down": ["cut", "cuts", "dovish", "lower rate", "lower rates", "easing", "yield falls", "yields fall", "stimulus"],
+    },
+    "Inflation": {
+        "up": ["hot inflation", "sticky inflation", "inflation rises", "inflation accelerates", "cpi rises", "price pressures", "higher inflation"],
+        "down": ["inflation cools", "inflation falls", "lower inflation", "disinflation", "cpi falls", "price growth slows"],
+    },
+    "Growth / productivity": {
+        "up": ["strong growth", "growth beats", "gdp rises", "productivity rises", "strong jobs", "retail sales rise", "economy expands"],
+        "down": ["growth slows", "weak growth", "recession", "gdp falls", "jobless claims rise", "unemployment rises", "economy contracts"],
+    },
+    "Trade / current account": {
+        "up": ["exports rise", "trade surplus", "current account surplus", "terms of trade improve", "trade balance improves"],
+        "down": ["imports rise", "trade deficit", "current account deficit", "terms of trade worsen", "trade balance worsens"],
+    },
+    "Debt / fiscal risk": {
+        "up": ["deficit narrows", "debt falls", "fiscal discipline", "budget surplus"],
+        "down": ["debt rises", "deficit widens", "fiscal risk", "downgrade", "borrowing rises", "budget deficit", "debt burden"],
+    },
+}
+
+FACTOR_EXPLANATIONS = {
+    "Interest rates": "Higher relative rates usually support a currency by raising expected asset returns.",
+    "Inflation": "Inflation is mixed: it can support a currency if it implies tighter policy, but hurt it if purchasing power erodes.",
+    "Growth / productivity": "Stronger growth and productivity tend to increase demand for domestic assets.",
+    "Trade / current account": "Stronger exports or external balances can support currency demand.",
+    "Debt / fiscal risk": "Higher fiscal risk usually weakens confidence in the currency.",
+}
+
+# -----------------------------
+# Data helpers
+# -----------------------------
+@st.cache_data(ttl=300)
+def fetch_direct_pair(ticker: str, period: str = "1y") -> pd.DataFrame:
+    data = yf.download(ticker, period=period, interval="1d", progress=False, auto_adjust=False)
+    if data.empty:
+        raise ValueError(f"No data returned for {ticker}.")
+
+    if isinstance(data.columns, pd.MultiIndex):
+        close = data["Close"].iloc[:, 0]
+    else:
+        close = data["Close"]
+
+    df = pd.DataFrame({"rate": close.dropna()})
+    df.index = pd.to_datetime(df.index)
+    return df
+
+
+def get_pair_series(base_currency: str, target_currency: str, period: str = "1y") -> pd.DataFrame:
+    if base_currency == target_currency:
+        raise ValueError("Base and target currencies must be different.")
+
+    direct = (base_currency, target_currency)
+    inverse = (target_currency, base_currency)
+
+    if direct in PAIR_TICKERS:
+        df = fetch_direct_pair(PAIR_TICKERS[direct], period).copy()
+        df["pair"] = f"{base_currency}/{target_currency}"
+        return df
+
+    if inverse in PAIR_TICKERS:
+        df = fetch_direct_pair(PAIR_TICKERS[inverse], period).copy()
+        df["rate"] = 1 / df["rate"]
+        df["pair"] = f"{base_currency}/{target_currency}"
+        return df
+
+    # Cross through USD
+    base_to_usd = get_pair_series(base_currency, "USD", period)["rate"]
+    target_to_usd = get_pair_series(target_currency, "USD", period)["rate"]
+    joined = pd.concat([base_to_usd, target_to_usd], axis=1, join="inner")
+    joined.columns = ["base_to_usd", "target_to_usd"]
+    out = pd.DataFrame(index=joined.index)
+    out["rate"] = joined["base_to_usd"] / joined["target_to_usd"]
+    out["pair"] = f"{base_currency}/{target_currency}"
+    return out.dropna()
+
+
+def classify_markup(markup: float):
+    if markup <= EXCELLENT_CUTOFF:
+        return "Excellent", "This quote is very close to the live FX market benchmark.", "#22C55E"
+    if markup <= FAIR_CUTOFF:
+        return "Fair", "This quote includes a normal retail spread.", "#D9B45F"
+    if markup <= EXPENSIVE_CUTOFF:
+        return "Expensive", "This quote is noticeably worse than spot.", "#EAB308"
+    return "Poor", "This quote is far from spot. Consider another provider.", "#EF4444"
+
+
+def fair_range(spot_rate: float, lower_fee: float, upper_fee: float):
+    best = spot_rate * (1 - lower_fee)
+    worst = spot_rate * (1 - upper_fee)
+    return worst, best
+
+
+def money(amount: float, currency: str) -> str:
+    symbols = {"USD": "$", "GBP": "£", "EUR": "€"}
+    return f"{symbols.get(currency, '')}{amount:,.2f}"
+
+
+def rate4(x: float) -> str:
+    return f"{x:.4f}"
+
+
+# -----------------------------
+# Headline scan helpers
+# -----------------------------
+@st.cache_data(ttl=1800)
+def scan_google_news(base_currency: str, target_currency: str):
+    query = (
+        f"{CURRENCY_NEWS_QUERY[base_currency]} OR {CURRENCY_NEWS_QUERY[target_currency]} "
+        f"{base_currency}{target_currency} exchange rate"
+    )
+    url = f"https://news.google.com/rss/search?q={quote_plus(query)}&hl=en-US&gl=US&ceid=US:en"
+
+    try:
+        response = requests.get(url, timeout=8, headers={"User-Agent": "FX-HAWK-Student-Project/1.0"})
+        response.raise_for_status()
+        feed = feedparser.parse(response.text)
+        headlines = []
+        for entry in feed.entries[:14]:
+            title = getattr(entry, "title", "").strip()
+            if title:
+                headlines.append(title)
+        return headlines
+    except Exception:
+        return []
+
+
+def currency_relevant_text(currency: str, headlines):
+    terms = CURRENCY_SEARCH_TERMS[currency]
+    selected = []
+    for h in headlines:
+        lower = h.lower()
+        if any(term in lower for term in terms):
+            selected.append(lower)
+    # fallback: if no specific headline is tagged to this currency, use all headlines
+    if not selected:
+        selected = [h.lower() for h in headlines]
+    return " ".join(selected)
+
+
+def score_currency(currency: str, headlines):
+    text = currency_relevant_text(currency, headlines)
+    scores = {}
+    for factor, rules in FACTOR_KEYWORDS.items():
+        raw = 0
+        for phrase in rules["up"]:
+            raw += text.count(phrase)
+        for phrase in rules["down"]:
+            raw -= text.count(phrase)
+
+        # cap to readable scale
+        if raw > 1:
+            score = 2
+        elif raw == 1:
+            score = 1
+        elif raw == 0:
+            score = 0
+        elif raw == -1:
+            score = -1
+        else:
+            score = -2
+
+        scores[factor] = score
+    return scores
+
+
+def build_factor_rows(base_currency: str, target_currency: str, headlines, rates: pd.DataFrame):
+    base_scores = score_currency(base_currency, headlines)
+    target_scores = score_currency(target_currency, headlines)
+
+    rows = []
+    total = 0
+
+    # Add market momentum as tie-breaker distributed into growth/risk signal
+    rate = rates["rate"]
+    one_week = rate.tail(6)
+    momentum = 0
+    if len(one_week) > 2:
+        pct = one_week.iloc[-1] / one_week.iloc[0] - 1
+        if pct > 0.003:
+            momentum = 1
+        elif pct < -0.003:
+            momentum = -1
+
+    for factor in FACTOR_KEYWORDS:
+        pair_score = base_scores[factor] - target_scores[factor]
+
+        # If news is too sparse, let recent market action influence the growth/productivity row only.
+        if factor == "Growth / productivity" and pair_score == 0:
+            pair_score += momentum
+
+        pair_score = max(min(pair_score, 2), -2)
+        total += pair_score
+
+        if pair_score > 0:
+            direction = "Pushing rate up"
+        elif pair_score < 0:
+            direction = "Pulling rate down"
+        else:
+            direction = "Neutral / unclear"
+
+        rows.append({
+            "factor": factor,
+            "score": pair_score,
+            "direction": direction,
+            "explanation": FACTOR_EXPLANATIONS[factor],
+        })
+
+    return rows, total
+
+
+def forecast_from_signal(total_signal: int, rates: pd.DataFrame, base_currency: str, target_currency: str):
+    rate = rates["rate"]
+    one_week = rate.tail(6)
+    three_week = rate.tail(16)
+
+    momentum_score = 0
+    if len(one_week) > 2:
+        mom1 = one_week.iloc[-1] / one_week.iloc[0] - 1
+        if mom1 > 0.003:
+            momentum_score += 1
+        elif mom1 < -0.003:
+            momentum_score -= 1
+
+    if len(three_week) > 2:
+        mom3 = three_week.iloc[-1] / three_week.iloc[0] - 1
+        if mom3 > 0.006:
+            momentum_score += 1
+        elif mom3 < -0.006:
+            momentum_score -= 1
+
+    combined = total_signal + momentum_score
+
+    if combined >= 2:
+        return "Likely higher", "#22C55E", f"The factor scan and recent momentum lean toward {base_currency} strengthening versus {target_currency}."
+    if combined <= -2:
+        return "Likely lower", "#EF4444", f"The factor scan and recent momentum lean toward {base_currency} weakening versus {target_currency}."
+    return "Mostly sideways", "#D9B45F", "The factor scan and recent momentum are mixed, so the one-week direction is unclear."
+
+
+def factor_badge(score: int):
+    if score > 0:
+        return "Pushing rate up", "#22C55E"
+    if score < 0:
+        return "Pulling rate down", "#EF4444"
+    return "Neutral / unclear", "#D9B45F"
+
+
+def factor_reason(row, base_currency: str, target_currency: str):
+    factor = row["factor"]
+    score = row["score"]
+    pair = f"{base_currency}/{target_currency}"
+
+    if score > 0:
+        first = f"This factor is pushing {pair} up because recent signals look more supportive for {base_currency} than {target_currency}."
+    elif score < 0:
+        first = f"This factor is pulling {pair} down because recent signals look less supportive for {base_currency} than {target_currency}."
+    else:
+        first = f"This factor is neutral because the scan did not find a clear advantage for either {base_currency} or {target_currency}."
+
+    second = row["explanation"]
+    return first + " " + second
+
+
+def factor_cards(rows, base_currency: str, target_currency: str):
+    html = ""
+    for r in rows:
+        label, color = factor_badge(r["score"])
+        html += f"""
+        <div class="factor-card">
+            <div class="factor-topline">
+                <div class="factor-name">{r['factor']}</div>
+                <div class="factor-badge" style="background:{color};">{label}</div>
+            </div>
+            <div class="factor-explain">{factor_reason(r, base_currency, target_currency)}</div>
+            <div class="factor-score-note">Signal score: {r['score']:+d}</div>
+        </div>
+        """
+    return html
+
+
+def make_history_chart(rates: pd.DataFrame, base_currency: str, target_currency: str):
+    chart_data = rates[["rate"]].reset_index()
+    chart_data.columns = ["Date", "Rate"]
+
+    avg_rate = float(chart_data["Rate"].mean())
+    data_min = float(chart_data["Rate"].min())
+    data_max = float(chart_data["Rate"].max())
+
+    # Keep the chart tight around the actual data, but make sure there is visual breathing room.
+    # User requested roughly 0.5 above and below average; for FX pairs that can be too wide,
+    # so the app uses the larger of a volatility/data-based pad or a small fraction of the average.
+    requested_pad = 0.5
+    data_pad = max((data_max - data_min) * 0.18, avg_rate * 0.015)
+    pad = min(requested_pad, max(data_pad, 0.01))
+
+    y_min = max(0, min(data_min - pad, avg_rate - pad))
+    y_max = max(data_max + pad, avg_rate + pad)
+
+    chart = (
+        alt.Chart(chart_data)
+        .mark_line()
+        .encode(
+            x=alt.X("Date:T", title="Date"),
+            y=alt.Y("Rate:Q", title=f"{base_currency}/{target_currency}", scale=alt.Scale(domain=[y_min, y_max])),
+            tooltip=[
+                alt.Tooltip("Date:T", title="Date"),
+                alt.Tooltip("Rate:Q", title="Rate", format=".4f"),
+            ],
+        )
+        .properties(height=300)
+    )
+    return chart
+
+
+# -----------------------------
+# UI
+# -----------------------------
+st.markdown('<div class="app-shell">', unsafe_allow_html=True)
+
+logo_path = Path(__file__).with_name("fx_hawk_logo.png")
+brand_cols = st.columns([1, 3.6])
+with brand_cols[0]:
+    if logo_path.exists():
+        st.image(str(logo_path), width=112)
+with brand_cols[1]:
+    st.markdown('<h1 class="brand-title">FX HAWK</h1>', unsafe_allow_html=True)
+    st.markdown('<div class="brand-subtitle">Know the fair rate before you exchange cash.</div>', unsafe_allow_html=True)
+
+st.markdown('<div class="section-card">', unsafe_allow_html=True)
+st.markdown('<div class="small-label">Quote Check</div>', unsafe_allow_html=True)
+
+row1 = st.columns(2)
+with row1[0]:
+    base_currency = st.selectbox("I have", CURRENCIES, index=0)
+with row1[1]:
+    target_currency = st.selectbox("I want", [c for c in CURRENCIES if c != base_currency], index=1)
+
+row2 = st.columns(2)
+with row2[0]:
+    amount = st.number_input(
+        f"Amount ({base_currency})",
+        min_value=0.01,
+        value=500.00,
+        step=10.00,
+        format="%.2f",
+    )
+with row2[1]:
+    offered_rate = st.number_input(
+        f"Shop rate ({target_currency} per 1 {base_currency})",
+        min_value=0.0001,
+        value=1.0000,
+        step=0.0001,
+        format="%.4f",
+    )
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# -----------------------------
+# Calculations
+# -----------------------------
+try:
+    rates = get_pair_series(base_currency, target_currency, HISTORY_PERIOD)
+    spot_rate = float(rates["rate"].iloc[-1])
+    latest_date = rates.index[-1].strftime("%Y-%m-%d")
+
+    target_at_spot = amount * spot_rate
+    target_at_shop = amount * offered_rate
+    target_loss_vs_spot = target_at_spot - target_at_shop
+    markup = max((spot_rate - offered_rate) / spot_rate, 0)
+    verdict, verdict_text, verdict_color = classify_markup(markup)
+
+    excellent_rng = fair_range(spot_rate, 0.00, EXCELLENT_CUTOFF)
+    fair_rng = fair_range(spot_rate, EXCELLENT_CUTOFF, FAIR_CUTOFF)
+    expensive_rng = fair_range(spot_rate, FAIR_CUTOFF, EXPENSIVE_CUTOFF)
+    poor_threshold = spot_rate * (1 - EXPENSIVE_CUTOFF)
+except Exception as e:
+    st.error(f"Could not load FX data. Details: {e}")
+    st.stop()
+
+st.markdown(
+    f"""
+    <div class="metric-grid">
+        <div class="metric-card">
+            <div class="metric-label">Market</div>
+            <div class="metric-value">{rate4(spot_rate)}</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Shop</div>
+            <div class="metric-value">{rate4(offered_rate)}</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Spread</div>
+            <div class="metric-value">{markup * 100:.2f}%</div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    f"""
+    <div class="result-box" style="border-left-color:{verdict_color};">
+        <div class="small-label">Verdict</div>
+        <div class="verdict" style="color:{verdict_color};">{verdict}</div>
+        <div class="muted">{verdict_text}</div>
+        <hr>
+        <div class="money-line">
+            Market value: <b>{money(target_at_spot, target_currency)}</b><br>
+            Shop gives you: <b>{money(target_at_shop, target_currency)}</b><br>
+            Difference vs market: <b>{money(max(target_loss_vs_spot, 0), target_currency)}</b>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# -----------------------------
+# Forecast and factors
+# -----------------------------
+headlines = scan_google_news(base_currency, target_currency)
+factor_rows, factor_signal = build_factor_rows(base_currency, target_currency, headlines, rates)
+forecast_label, forecast_color, forecast_explanation = forecast_from_signal(
+    factor_signal, rates, base_currency, target_currency
+)
+
+st.markdown(
+    f"""
+    <div class="forecast-box" style="border-left-color:{forecast_color};">
+        <div class="small-label">Next-Week Directional Read</div>
+        <div class="forecast-title" style="color:{forecast_color};">{forecast_label}</div>
+        <div class="muted">{forecast_explanation}</div>
+        <hr>
+        <div class="money-line">
+            Forecast target: <b>{base_currency}/{target_currency}</b>, meaning {target_currency} per 1 {base_currency}.<br>
+            Five-factor score: <b>{factor_signal:+d}</b>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown('<div class="section-card">', unsafe_allow_html=True)
+st.markdown('<div class="small-label">Five-Factor FX Signal</div>', unsafe_allow_html=True)
+st.markdown(factor_cards(factor_rows, base_currency, target_currency), unsafe_allow_html=True)
+st.markdown(
+    '<div class="footnote">Each factor is classified as pushing the displayed rate up, pulling it down, or neutral. The label comes from scanned headlines plus recent market momentum when headline data is sparse.</div>',
+    unsafe_allow_html=True,
+)
+st.markdown('</div>', unsafe_allow_html=True)
+
+if headlines:
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    st.markdown('<div class="small-label">Scanned Headlines</div>', unsafe_allow_html=True)
+    items = "".join(f"<li>{h}</li>" for h in headlines[:5])
+    st.markdown(f"<ul class='headline-list'>{items}</ul>", unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+else:
+    st.warning("Headline scan unavailable. The forecast is using recent market momentum only.")
+
+# -----------------------------
+# Fair rate guide
+# -----------------------------
+st.markdown('<div class="section-card">', unsafe_allow_html=True)
+st.markdown('<div class="small-label">Fair Rate Guide</div>', unsafe_allow_html=True)
+st.markdown(
+    f"""
+    <table class="hawk-table">
+        <tr>
+            <th>Rating</th>
+            <th>Rate Range</th>
+        </tr>
+        <tr>
+            <td>Excellent</td>
+            <td>{rate4(excellent_rng[0])} – {rate4(excellent_rng[1])}</td>
+        </tr>
+        <tr>
+            <td>Fair</td>
+            <td>{rate4(fair_rng[0])} – {rate4(fair_rng[1])}</td>
+        </tr>
+        <tr>
+            <td>Expensive</td>
+            <td>{rate4(expensive_rng[0])} – {rate4(expensive_rng[1])}</td>
+        </tr>
+        <tr>
+            <td>Poor</td>
+            <td>&lt; {rate4(poor_threshold)}</td>
+        </tr>
+    </table>
+    """,
+    unsafe_allow_html=True,
+)
+st.markdown('</div>', unsafe_allow_html=True)
+
+# -----------------------------
+# Historical chart
+# -----------------------------
+st.markdown('<div class="section-card">', unsafe_allow_html=True)
+st.markdown('<div class="small-label">1-Year Market History</div>', unsafe_allow_html=True)
+st.altair_chart(make_history_chart(rates, base_currency, target_currency), use_container_width=True)
+st.markdown(
+    f'<div class="footnote">Latest market data: {latest_date}. The chart is scaled around the recent trading range instead of starting at zero, making small FX movements easier to see.</div>',
+    unsafe_allow_html=True,
+)
+st.markdown('</div>', unsafe_allow_html=True)
+
+
+st.markdown(
+    """
+    <div class="how-it-works-box">
+        <h3>How FX HAWK Works</h3>
+        <p>
+            FX HAWK compares the exchange rate offered by a shop against a live market benchmark.
+            First, it pulls recent foreign exchange data from Yahoo Finance for USD, GBP, and EUR.
+            Then it treats the current spot rate as the institutional market reference rate.
+        </p>
+        <ul>
+            <li><b>Fair-rate check:</b> The app measures how far the shop's rate is from the live spot rate and converts that gap into an implied retail spread.</li>
+            <li><b>Verdict:</b> A small spread is labeled Excellent or Fair. A larger spread is labeled Expensive or Poor.</li>
+            <li><b>Forecast read:</b> The app scans recent currency-related headlines and combines them with short-term price momentum to estimate whether the displayed exchange rate may move higher, lower, or sideways over the next week.</li>
+            <li><b>Five-factor signal:</b> The factor table summarizes whether interest rates, inflation, growth/productivity, trade/current account conditions, and fiscal risk appear to be pushing the exchange rate up or down.</li>
+        </ul>
+        <p>
+            The app is not trying to perfectly predict currency markets. Its main purpose is to help travelers avoid unfair exchange quotes by showing a transparent benchmark, a fair retail range, and a simple explanation of the market signals behind the result.
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+st.markdown(
+    '<div class="footnote">FX HAWK is an educational prototype. Retail providers may add separate commissions or flat fees. The next-week read is a transparent rule-based signal, not financial advice.</div>',
+    unsafe_allow_html=True,
+)
+
+st.markdown('</div>', unsafe_allow_html=True)
